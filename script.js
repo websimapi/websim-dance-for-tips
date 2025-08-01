@@ -15,6 +15,12 @@ let hostId = null;
 let ytPlayer;
 
 // --- Main Initialization ---
+window.onMediaPipeLoaded = async function() {
+    // This function is called from index.html's script tag for MediaPipe
+    // This ensures Pose is defined on window before we proceed.
+    main();
+};
+
 async function main() {
     try {
         const [project, creator, currentUser] = await Promise.all([
@@ -82,13 +88,18 @@ function createSkeleton() {
     }
 
     // Create cylinders for bones
-    const boneMaterial = new THREE.LineBasicMaterial({ color: 0x03dac6, linewidth: 3 });
-    const connections = Pose.POSE_CONNECTIONS;
-    for (const connection of connections) {
-        const geometry = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,0,0), new THREE.Vector3(0,0,0)]);
-        const bone = new THREE.Line(geometry, boneMaterial);
-        bone.visible = false;
-        skeletonGroup.add(bone);
+    // Ensure Pose is loaded before trying to access POSE_CONNECTIONS
+    if (window.Pose && window.Pose.POSE_CONNECTIONS) {
+        const boneMaterial = new THREE.LineBasicMaterial({ color: 0x03dac6, linewidth: 3 });
+        const connections = window.Pose.POSE_CONNECTIONS;
+        for (const connection of connections) {
+            const geometry = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,0,0), new THREE.Vector3(0,0,0)]);
+            const bone = new THREE.Line(geometry, boneMaterial);
+            bone.visible = false;
+            skeletonGroup.add(bone);
+        }
+    } else {
+        console.error("Pose library not loaded correctly, cannot create skeleton bones.");
     }
 
     scene.add(skeletonGroup);
@@ -113,17 +124,23 @@ function updateSkeleton(landmarks) {
     }
     
     // Update bones
-    const connections = Pose.POSE_CONNECTIONS;
-    for (let i = 0; i < connections.length; i++) {
-        const startIdx = connections[i][0];
-        const endIdx = connections[i][1];
+    if (window.Pose && window.Pose.POSE_CONNECTIONS) {
+        const connections = window.Pose.POSE_CONNECTIONS;
+        for (let i = 0; i < connections.length; i++) {
+            const startIdx = connections[i][0];
+            const endIdx = connections[i][1];
 
-        const startPos = skeletonGroup.children[startIdx].position;
-        const endPos = skeletonGroup.children[endIdx].position;
-        
-        const bone = skeletonGroup.children[33 + i];
-        bone.geometry.setFromPoints([startPos, endPos]);
-        bone.geometry.verticesNeedUpdate = true;
+            if (startIdx >= landmarks.length || endIdx >= landmarks.length) continue;
+
+            const startPos = skeletonGroup.children[startIdx].position;
+            const endPos = skeletonGroup.children[endIdx].position;
+            
+            const bone = skeletonGroup.children[33 + i];
+            if (bone) {
+                bone.geometry.setFromPoints([startPos, endPos]);
+                bone.geometry.verticesNeedUpdate = true;
+            }
+        }
     }
 }
 
@@ -253,11 +270,12 @@ function onPlayerStateChange(event) {
 
     const isPlaying = event.data === YT.PlayerState.PLAYING;
     const time = ytPlayer.getCurrentTime();
-    const videoId = ytPlayer.getVideoData()['video_id'];
+    const videoData = ytPlayer.getVideoData();
+    const videoId = videoData ? videoData['video_id'] : null;
 
     if (videoId) {
         room.updateRoomState({
-            youtube: { ...room.roomState.youtube, time, isPlaying }
+            youtube: { ...room.roomState.youtube, videoId, time, isPlaying }
         });
     }
 }
@@ -344,7 +362,3 @@ function addCommentToUI(comment, isNew) {
         setTimeout(() => liveComment.remove(), 10000);
     }
 }
-
-
-// --- Start the App ---
-main();
