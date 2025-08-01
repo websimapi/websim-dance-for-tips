@@ -1,5 +1,4 @@
 import * as THREE from 'three';
-import { Pose } from '@mediapipe/pose';
 import { marked } from "marked";
 import DOMPurify from "dompurify";
 
@@ -349,4 +348,3 @@ function addCommentToUI(comment, isNew) {
 
 // --- Start the App ---
 main();
-
