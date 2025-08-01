@@ -15,13 +15,26 @@ let hostId = null;
 let ytPlayer;
 
 // --- Main Initialization ---
-window.onMediaPipeLoaded = async function() {
-    // This function is called from index.html's script tag for MediaPipe
-    // This ensures Pose is defined on window before we proceed.
-    main();
-};
+// Attach the initialization trigger to the window object
+// so it can be called after MediaPipe is ready.
+window.onMediaPipeLoaded = main;
+
+// The mediapipe script in index.html will load, and then we'll call main().
+// A small delay ensures the Pose object is available on the window.
+setTimeout(() => {
+    if (window.Pose) {
+        main();
+    } else {
+        console.error("MediaPipe Pose library not found after timeout.");
+        statusText.textContent = "Error loading tracking library. Please refresh.";
+    }
+}, 500);
 
 async function main() {
+    // Prevent double initialization
+    if (window.appInitialized) return;
+    window.appInitialized = true;
+
     try {
         const [project, creator, currentUser] = await Promise.all([
             window.websim.getCurrentProject(),
