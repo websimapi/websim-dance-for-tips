@@ -8,6 +8,8 @@ const statusText = document.getElementById('status-text');
 const threeContainer = document.getElementById('three-container');
 const webcamFeed = document.getElementById('webcam-feed');
 const liveCommentsContainer = document.getElementById('live-comments-container');
+const outputCanvas = document.getElementById('output-canvas');
+const canvasCtx = outputCanvas.getContext('2d');
 
 let scene, camera, renderer, skeletonGroup;
 let isHost = false;
@@ -22,10 +24,10 @@ window.onMediaPipeLoaded = main;
 // The mediapipe script in index.html will load, and then we'll call main().
 // A small delay ensures the Pose object is available on the window.
 setTimeout(() => {
-    if (window.Pose) {
+    if (window.Pose && window.Camera) {
         main();
     } else {
-        console.error("MediaPipe Pose library not found after timeout.");
+        console.error("MediaPipe libraries not found after timeout.");
         statusText.textContent = "Error loading tracking library. Please refresh.";
     }
 }, 500);
@@ -58,6 +60,10 @@ async function main() {
 
         room.subscribePresence(handlePresenceUpdate);
         room.subscribeRoomState(handleRoomStateUpdate);
+        
+        // Initial sync of state
+        handlePresenceUpdate();
+        handleRoomStateUpdate();
         
         animate();
 
@@ -103,7 +109,7 @@ function createSkeleton() {
     // Create cylinders for bones
     // Ensure Pose is loaded before trying to access POSE_CONNECTIONS
     if (window.Pose && window.Pose.POSE_CONNECTIONS) {
-        const boneMaterial = new THREE.LineBasicMaterial({ color: 0x03dac6, linewidth: 3 });
+        const boneMaterial = new THREE.LineBasicMaterial({ color: 0x03dac6, linewidth: 3, transparent: true, opacity: 0.75 });
         const connections = window.Pose.POSE_CONNECTIONS;
         for (const connection of connections) {
             const geometry = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,0,0), new THREE.Vector3(0,0,0)]);
@@ -184,30 +190,29 @@ function setupMediaPipe() {
 
     pose.onResults(onPoseResults);
 
-    navigator.mediaDevices.getUserMedia({ video: true })
-        .then(stream => {
-            webcamFeed.srcObject = stream;
-            webcamFeed.play();
-            statusText.textContent = 'Look at the camera!';
-
-            async function sendToMediaPipe() {
-                if (webcamFeed.readyState >= 3) {
-                     await pose.send({image: webcamFeed});
-                }
-                requestAnimationFrame(sendToMediaPipe);
-            }
-            sendToMediaPipe();
-        })
-        .catch(err => {
-            console.error("webcam error", err);
-            statusText.textContent = 'Webcam access denied. Cannot dance.';
-        });
+    const camera = new Camera(webcamFeed, {
+        onFrame: async () => {
+            await pose.send({image: webcamFeed});
+        },
+        width: 640,
+        height: 480
+    });
+    camera.start();
+    statusText.textContent = 'Look at the camera!';
 }
 
 function onPoseResults(results) {
     if (results.poseWorldLandmarks) {
-        room.updatePresence({ pose: results.poseWorldLandmarks });
+        room.updatePresence({ pose: results.poseWorldLandmarks, userId: hostId });
     }
+    
+    // We can use the canvas to debug if needed by drawing landmarks, but for now it's not necessary
+    // canvasCtx.save();
+    // canvasCtx.clearRect(0, 0, outputCanvas.width, outputCanvas.height);
+    // canvasCtx.drawImage(results.image, 0, 0, outputCanvas.width, outputCanvas.height);
+    // drawConnectors(canvasCtx, results.poseLandmarks, POSE_CONNECTIONS, {color: '#00FF00', lineWidth: 4});
+    // drawLandmarks(canvasCtx, results.poseLandmarks, {color: '#FF0000', lineWidth: 2});
+    // canvasCtx.restore();
 }
 
 // --- Multiplayer Sync (WebsimSocket) ---
@@ -216,8 +221,11 @@ function handlePresenceUpdate() {
     if (hostPresence && hostPresence.pose) {
         updateSkeleton(hostPresence.pose);
     } else {
-        skeletonGroup.children.forEach(c => c.visible = false);
+        if (skeletonGroup) {
+            skeletonGroup.children.forEach(c => c.visible = false);
+        }
         statusText.style.display = 'block';
+        statusText.textContent = 'Waiting for the host to start dancing...';
     }
 }
 

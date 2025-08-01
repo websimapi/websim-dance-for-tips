@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dance for Tips</title>
     <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
     <script type="importmap">
       {
@@ -26,6 +27,7 @@
             <div id="live-comments-container"></div>
             <!-- The host's webcam feed (can be hidden) -->
             <video id="webcam-feed" style="display: none;"></video>
+            <canvas id="output-canvas" style="display: none;"></canvas>
         </div>
 
         <div id="side-panel">
